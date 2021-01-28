@@ -73,7 +73,7 @@ Resources:
             - ecr:GetAuthorizationToken
             - ecr:InitiateLayerUpload
             - ecr:PutImage
-            - ecr:UploadLayerPar
+            - ecr:UploadLayerPart
           Resource: "*"
       Roles:
         - !Ref CodeBuildRole
@@ -176,6 +176,7 @@ Resources:
       Environment:
         Type: "LINUX_CONTAINER"
         ComputeType: BUILD_GENERAL1_SMALL
+        PrivilegedMode: true  # required for docker builds
         EnvironmentVariables:
           - Name: env
             Type: PLAINTEXT
