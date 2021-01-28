@@ -99,6 +99,54 @@ Resources:
       Roles:
         - !Ref CodePipelineRole
 
+  CloudWatchEventRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - events.amazonaws.com
+            Action: sts:AssumeRole
+      Path: /
+      Policies:
+        -
+          PolicyName: cwe-pipeline-execution
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: Allow
+                Action: codepipeline:StartPipelineExecution
+                Resource: !Sub arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
+
+  AmazonCloudWatchEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventPattern:
+        source:
+          - aws.codecommit
+        detail-type:
+          - 'CodeCommit Repository State Change'
+        resources:
+          - !Sub
+            - arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:${RepositoryName}
+            - RepositoryName: !Select [0, !Split [ "/" , !Ref CodeCommitRepo ]]
+        detail:
+          event:
+            - referenceCreated
+            - referenceUpdated
+          referenceType:
+            - branch
+          referenceName:
+            - !Select [1, !Split [ "/" , !Ref CodeCommitRepo ]]
+      Targets:
+        - Arn: !Sub arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}
+          RoleArn: !GetAtt CloudWatchEventRole.Arn
+          Id: codepipeline-AppPipeline
+
   ##
   # S3 bucket used by CodePipeline
   #
@@ -135,6 +183,9 @@ Resources:
           - Name: IMAGE_REPO_NAME
             Type: PLAINTEXT
             Value: !Ref ECRegistry
+          - Name: AWS_ACCOUNT_ID
+            Type: PLAINTEXT
+            Value: !Ref AWS::AccountId
         Image: aws/codebuild/standard:3.0
       Artifacts:
         Type: CODEPIPELINE
@@ -166,8 +217,7 @@ Resources:
               Configuration:
                 RepositoryName: !Select [0, !Split [ "/" , !Ref CodeCommitRepo ]]
                 BranchName: !Select [1, !Split [ "/" , !Ref CodeCommitRepo ]]
-                PollForSourceChanges: true
-                # OutputArtifactFormat: CODEBUILD_CLONE_REF
+                PollForSourceChanges: false
               OutputArtifacts:
                 - Name: artifactSourceCode
 
