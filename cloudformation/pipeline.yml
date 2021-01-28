@@ -28,6 +28,11 @@ Parameters:
     Description:  Our proxy codecommit repo in form  repo/branch
     Default: fargate-ansible-runner/master
 
+  ECRegistry:
+    Type: String
+    Description: Name of the ECR registry to push to
+    Default: fargate-ansible-runner
+
 Resources:
   CodeBuildRole:
     Type: "AWS::IAM::Role"
@@ -62,6 +67,7 @@ Resources:
           Action:
             - 'logs:*'
             - 'codebuild:*'
+            - 's3:*'
             - ecr:BatchCheckLayerAvailability
             - ecr:CompleteLayerUpload
             - ecr:GetAuthorizationToken
@@ -99,7 +105,7 @@ Resources:
   S3:
     Type: "AWS::S3::Bucket"
     Properties:
-      BucketName: !Sub ${AWS::AccountId}-ssprvp-${CodePipelineBucketPrefix}${Environment}
+      BucketName: !Sub ${AWS::AccountId}-runner-${CodePipelineBucketPrefix}${Environment}
 
   BitbucketConnection:
     Type: AWS::CodeStarConnections::Connection
@@ -118,7 +124,7 @@ Resources:
       TimeoutInMinutes: 10
       Source:
         Type: CODEPIPELINE
-        BuildSpec: "buildspec-package.yml"
+        BuildSpec: "buildspec.yml"
       Environment:
         Type: "LINUX_CONTAINER"
         ComputeType: BUILD_GENERAL1_SMALL
@@ -128,7 +134,7 @@ Resources:
             Value: !Ref Environment
           - Name: IMAGE_REPO_NAME
             Type: PLAINTEXT
-            Value: !Select [0, !Split [ "/" , !Ref CodeCommitRepo ]]
+            Value: !Ref ECRegistry
         Image: aws/codebuild/standard:3.0
       Artifacts:
         Type: CODEPIPELINE
