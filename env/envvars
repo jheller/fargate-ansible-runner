@@ -1,0 +1,2 @@
+---
+ANSIBLE_CONFIG: project/ansible.cfg

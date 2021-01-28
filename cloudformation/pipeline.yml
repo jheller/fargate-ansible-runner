@@ -1,0 +1,255 @@
+##
+# This is a CloudFormation template to build the AWS infrastructure for an AWS CodePipeline CI/CD pipeline
+# with associated AWS CodeBuild stages and S3 bucket for pipeline artifacts.
+#
+#
+#
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: 'Creates a CodePipeline to deploy our serverless framework stack'
+
+Parameters:
+  Environment:
+    AllowedValues:
+    - dev
+    - uat
+    - prod
+    Description: Environment
+    Type: String
+    Default: dev
+
+  CodePipelineBucketPrefix:
+    Description: CodePipeline needs a utility bucket for its internal use. Specify a unique prefix for the bucket name
+    Type: String
+    Default: codepipeline-
+
+  CodeCommitRepo:
+    Type: String
+    Description:  Our proxy codecommit repo in form  repo/branch
+    Default: fargate-ansible-runner/master
+
+Resources:
+  CodeBuildRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          Effect: "Allow"
+          Principal:
+            Service: "codebuild.amazonaws.com"
+          Action: "sts:AssumeRole"
+
+  CodePipelineRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          Effect: "Allow"
+          Principal:
+            Service: "codepipeline.amazonaws.com"
+          Action: "sts:AssumeRole"
+
+  CodeBuildPolicy:
+    Type: "AWS::IAM::ManagedPolicy"
+    Properties:
+      ManagedPolicyName: !Sub CodeBuildPolicy-${AWS::StackName}-${Environment}
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          Effect: Allow
+          Action:
+            - 'logs:*'
+            - 'codebuild:*'
+            - ecr:BatchCheckLayerAvailability
+            - ecr:CompleteLayerUpload
+            - ecr:GetAuthorizationToken
+            - ecr:InitiateLayerUpload
+            - ecr:PutImage
+            - ecr:UploadLayerPar
+          Resource: "*"
+      Roles:
+        - !Ref CodeBuildRole
+
+  CodePipelinePolicy:
+    Type: "AWS::IAM::ManagedPolicy"
+    Properties:
+      ManagedPolicyName: !Sub CodePipelinePolicy-${AWS::StackName}-${Environment}
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+            - s3:putObject
+            - s3:getObject
+            - codebuild:*
+            - codecommit:*
+          Resource:
+            - "*"
+      Roles:
+        - !Ref CodePipelineRole
+
+  ##
+  # S3 bucket used by CodePipeline
+  #
+  S3:
+    Type: "AWS::S3::Bucket"
+    Properties:
+      BucketName: !Sub ${AWS::AccountId}-ssprvp-${CodePipelineBucketPrefix}${Environment}
+
+  BitbucketConnection:
+    Type: AWS::CodeStarConnections::Connection
+    Properties:
+      ConnectionName: !Sub Bitbucket-${Environment}
+      ProviderType: Bitbucket
+
+  # Build/Package stage of our pipeline - thanks to CodeBuild
+  #
+  SlsBuild:
+    Type: "AWS::CodeBuild::Project"
+    Properties:
+      Name: !Sub ${AWS::StackName}-Build
+      Description: Build and package lambda functions using the Serverless Framework.
+      ServiceRole: !Ref CodeBuildRole
+      TimeoutInMinutes: 10
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: "buildspec-package.yml"
+      Environment:
+        Type: "LINUX_CONTAINER"
+        ComputeType: BUILD_GENERAL1_SMALL
+        EnvironmentVariables:
+          - Name: env
+            Type: PLAINTEXT
+            Value: !Ref Environment
+          - Name: IMAGE_REPO_NAME
+            Type: PLAINTEXT
+            Value: !Select [0, !Split [ "/" , !Ref CodeCommitRepo ]]
+        Image: aws/codebuild/standard:3.0
+      Artifacts:
+        Type: CODEPIPELINE
+
+  ##
+  # CodePipeline with its stages
+  #
+  Pipeline:
+    Type: "AWS::CodePipeline::Pipeline"
+    Properties:
+      Name: !Sub ${AWS::StackName}-pipeline
+      ArtifactStore:
+        Location: !Ref S3
+        Type: S3
+      RestartExecutionOnUpdate: true
+      RoleArn: !GetAtt CodePipelineRole.Arn
+      Stages:
+
+        # Stage 1:  Get the source from Bitbucket:
+        - Name: Source
+          Actions:
+            - Name: SourceAction
+              RunOrder: 1
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeCommit
+                Version: 1
+              Configuration:
+                RepositoryName: !Select [0, !Split [ "/" , !Ref CodeCommitRepo ]]
+                BranchName: !Select [1, !Split [ "/" , !Ref CodeCommitRepo ]]
+                PollForSourceChanges: true
+                # OutputArtifactFormat: CODEBUILD_CLONE_REF
+              OutputArtifacts:
+                - Name: artifactSourceCode
+
+        # Stage 2:  Build and package using Serverless Framework
+        - Name: SlsBuild
+          Actions:
+            - Name: Build
+              RunOrder: 1
+              InputArtifacts:
+                - Name: artifactSourceCode
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: 1
+              Configuration:
+                ProjectName:  !Ref SlsBuild
+              OutputArtifacts:
+                - Name: artifactSlsPackage
+
+  BuildNotificationSNS:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub ${AWS::StackName}-SlsBuild
+
+  BuildNotificationSNSPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      PolicyDocument:
+        Version: 2008-10-17
+        Id: CodeStar_Notifications
+        Statement:
+          - Sid: "__default_statement_ID"
+            Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - SNS:GetTopicAttributes
+              - SNS:SetTopicAttributes
+              - SNS:AddPermission
+              - SNS:RemovePermission
+              - SNS:DeleteTopic
+              - SNS:Subscribe
+              - SNS:ListSubscriptionsByTopic
+              - SNS:Publish
+              - SNS:Receive
+            Resource: !Ref BuildNotificationSNS
+            Condition:
+              StringEquals:
+                AWS:SourceOwner: !Ref AWS::AccountId
+          - Sid: AWSCodeStarNotifications_publish
+            Effect: Allow
+            Principal:
+              Service: codestar-notifications.amazonaws.com
+            Action:
+              - SNS:Publish
+            Resource: !Ref BuildNotificationSNS
+      Topics:
+        - !Ref BuildNotificationSNS
+
+  BuildNotification:
+    Type: AWS::CodeStarNotifications::NotificationRule
+    Properties:
+            Name: Notification Rule for CodeBuild
+            DetailType: BASIC
+            Resource: !GetAtt SlsBuild.Arn
+            EventTypeIds:
+                - codebuild-project-build-state-failed
+                - codebuild-project-build-state-succeeded
+                - codebuild-project-build-state-stopped
+            Targets:
+                - TargetType: SNS
+                  TargetAddress: !Ref BuildNotificationSNS
+
+Outputs:
+  CodeBuild:
+    Value: !Ref Pipeline
+  Environment:
+    Value: !Ref Environment
+  CodeCommitRepo:
+    Value: !Ref CodeCommitRepo
+  CodeBuildRole:
+    Value: !Ref CodeBuildRole
+  CodeBuildPolicy:
+    Value: !Ref CodeBuildPolicy
+  CodePipelineRole:
+    Value: !Ref CodePipelineRole
+  CodePipelinePolicy:
+    Value: !Ref CodePipelinePolicy
+  S3:
+    Value: !Ref S3
