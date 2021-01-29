@@ -1,7 +1,7 @@
 ---
 # This playbook deploys the whole application stack in this site.
 
-- name: Common playbook
-  hosts: nginx
+- name: Apache playbook
+  hosts: apache
   roles:
-    - nginx
+    - apache

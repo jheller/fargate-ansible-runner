@@ -53,7 +53,7 @@ Resources:
         Statement:
           Effect: "Allow"
           Principal:
-            Service: "codepipeline.amazonaws.com"
+            Service: "cloudformation.amazonaws.com"
           Action: "sts:AssumeRole"
 
   CodePipelineRole:
@@ -99,8 +99,10 @@ Resources:
         Statement:
           Effect: Allow
           Action:
-            - 'logs:*'
-            - 'ecs:*'
+            - logs:*
+            - ecs:*
+            - ec2:CreateSecurityGroup
+            - ec2:DescribeSecurityGroups
             - ecr:CompleteLayerUpload
             - ecr:GetAuthorizationToken
             - ecr:InitiateLayerUpload
@@ -147,6 +149,7 @@ Resources:
             - codebuild:*
             - codecommit:*
             - cloudformation:*
+            - iam:PassRole
           Resource:
             - "*"
       Roles:

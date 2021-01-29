@@ -1,0 +1,28 @@
+# package directories
+node_modules
+!layer/nodejs/node_modules
+jspm_packages
+venv/
+
+# Serverless directories
+.serverless
+.aws-sam
+
+# sonarqube directory
+.scannerwork
+
+# emacs
+*~
+\#*\#
+secrets.yml
+
+.DS_Store
+
+# SAM exclusions
+env.json
+packaged.yaml
+
+*.phony
+*.bak
+
+__pycache__
