@@ -85,6 +85,7 @@ Resources:
             - ecr:InitiateLayerUpload
             - ecr:PutImage
             - ecr:UploadLayerPart
+            - ecr:DescribeImages
           Resource: "*"
       Roles:
         - !Ref CodeBuildRole
@@ -145,6 +146,7 @@ Resources:
             - s3:getObject
             - codebuild:*
             - codecommit:*
+            - cloudformation:*
           Resource:
             - "*"
       Roles:
