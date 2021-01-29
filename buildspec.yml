@@ -19,8 +19,8 @@ phases:
       - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$CODEBUILD_BUILD_NUMBER
       - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:latest
     finally:
-      - digest\=$(aws ecr describe-images --repository-name $IMAGE_REPO_NAME --image-ids imageTag=$CODEBUILD_BUILD_NUMBER --region $AWS_DEFAULT_REGION --query 'imageDetails[0].imageDigest' --output text)"
-      - echo "{ \"ContainerTag\": \"$digest\",\"ECRepository\": \"$IMAGE_REPO_NAME\"}" > config.json
+      - DIGEST=$(aws ecr describe-images --repository-name $IMAGE_REPO_NAME --image-ids imageTag=$CODEBUILD_BUILD_NUMBER --region $AWS_DEFAULT_REGION --query 'imageDetails[0].imageDigest' --output text)"
+      - echo "{ \"ContainerTag\": \"$DIGEST\",\"ECRepository\": \"$IMAGE_REPO_NAME\"}" > config.json
 artifacts:
   files:
     - config.json
