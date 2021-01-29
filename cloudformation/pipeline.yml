@@ -45,6 +45,17 @@ Resources:
             Service: "codebuild.amazonaws.com"
           Action: "sts:AssumeRole"
 
+  DeployRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          Effect: "Allow"
+          Principal:
+            Service: "codepipeline.amazonaws.com"
+          Action: "sts:AssumeRole"
+
   CodePipelineRole:
     Type: "AWS::IAM::Role"
     Properties:
@@ -77,6 +88,46 @@ Resources:
           Resource: "*"
       Roles:
         - !Ref CodeBuildRole
+
+  DeployPolicy:
+    Type: "AWS::IAM::ManagedPolicy"
+    Properties:
+      ManagedPolicyName: !Sub DeployPolicy-${AWS::StackName}-${Environment}
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          Effect: Allow
+          Action:
+            - 'logs:*'
+            - 'ecs:*'
+            - ecr:CompleteLayerUpload
+            - ecr:GetAuthorizationToken
+            - ecr:InitiateLayerUpload
+            - ecr:PutImage
+            - ecr:UploadLayerPart
+            - iam:Get*
+            - iam:AddRoleToInstanceProfile
+            - iam:AttachRolePolicy
+            - iam:ListAttachedRolePolicies
+            - iam:CreateAccountAlias
+            - iam:CreateInstanceProfile
+            - iam:CreateRole
+            - iam:CreatePolicy
+            - iam:CreatePolicyVersion
+            - iam:DeleteAccountAlias
+            - iam:DeleteInstanceProfile
+            - iam:DeleteRole
+            - iam:DeleteRolePolicy
+            - iam:DetachRolePolicy
+            - iam:DeletePolicy
+            - iam:ListPolicyVersions
+            - iam:PassRole
+            - iam:PutRolePolicy
+            - iam:RemoveRoleFromInstanceProfile
+            - iam:UpdateAccountPasswordPolicy
+          Resource: "*"
+      Roles:
+        - !Ref DeployRole
 
   CodePipelinePolicy:
     Type: "AWS::IAM::ManagedPolicy"
@@ -245,7 +296,7 @@ Resources:
             - Name: TaskDefinitionDeployment
               RunOrder: 1
               InputArtifacts:
-                - Name: artifactPackage
+                - Name: artifactBuild
                 - Name: artifactSourceCode
               ActionTypeId:
                 Category: Deploy
@@ -256,7 +307,7 @@ Resources:
                 ActionMode: CREATE_UPDATE
                 StackName: !Sub ${AWS::StackName}-task-deploy
                 Capabilities: CAPABILITY_IAM
-                RoleArn: xxx
+                RoleArn: !GetAtt DeployRole.Arn
                 TemplatePath: artifactSourceCode::cloudformation/runner.yml
                 TemplateConfiguration: artifactBuild::config.json
 
