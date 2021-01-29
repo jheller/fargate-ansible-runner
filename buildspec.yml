@@ -5,7 +5,6 @@ phases:
     commands:
       - echo Logging in to Amazon ECR...
       - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
-      - env
   build:
     commands:
       - echo Build started on `date`
@@ -19,3 +18,9 @@ phases:
       - echo Pushing the Docker image...
       - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$CODEBUILD_BUILD_NUMBER
       - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:latest
+    finally:
+      - digest-$(aws ecr describe-images --repository-name $IMAGE_REPO_NAME --image-ids imageTag=$CODEBUILD_BUILD_NUMBER --region $AWS_DEFAULT_REGION --query 'imageDetails[0].imageDigest' --output text)
+      - echo "{ \"ContainerTag\": \"$digest\",\"ECRepository\": \"$IMAGE_REPO_NAME\"}" > config.json
+artifacts:
+  files:
+    - config.json

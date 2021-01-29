@@ -163,7 +163,7 @@ Resources:
 
   # Build/Package stage of our pipeline - thanks to CodeBuild
   #
-  SlsBuild:
+  Build:
     Type: "AWS::CodeBuild::Project"
     Properties:
       Name: !Sub ${AWS::StackName}-Build
@@ -222,8 +222,8 @@ Resources:
               OutputArtifacts:
                 - Name: artifactSourceCode
 
-        # Stage 2:  Build and package using Serverless Framework
-        - Name: SlsBuild
+        # Stage 2:  Build the container image and push to ECR
+        - Name: Build
           Actions:
             - Name: Build
               RunOrder: 1
@@ -235,14 +235,35 @@ Resources:
                 Provider: CodeBuild
                 Version: 1
               Configuration:
-                ProjectName:  !Ref SlsBuild
+                ProjectName:  !Ref Build
               OutputArtifacts:
-                - Name: artifactSlsPackage
+                - Name: artifactBuild
+
+        # Stage 3:  Deploy the container image to a task definition
+        - Name: Deploy
+          Actions:
+            - Name: TaskDefinitionDeployment
+              RunOrder: 1
+              InputArtifacts:
+                - Name: artifactPackage
+                - Name: artifactSourceCode
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: 1
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                StackName: !Sub ${AWS::StackName}-task-deploy
+                Capabilities: CAPABILITY_IAM
+                RoleArn: xxx
+                TemplatePath: artifactSourceCode::cloudformation/runner.yml
+                TemplateConfiguration: artifactBuild::config.json
 
   BuildNotificationSNS:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: !Sub ${AWS::StackName}-SlsBuild
+      TopicName: !Sub ${AWS::StackName}-Build
 
   BuildNotificationSNSPolicy:
     Type: AWS::SNS::TopicPolicy
@@ -284,7 +305,7 @@ Resources:
     Properties:
             Name: Notification Rule for CodeBuild
             DetailType: BASIC
-            Resource: !GetAtt SlsBuild.Arn
+            Resource: !GetAtt Build.Arn
             EventTypeIds:
                 - codebuild-project-build-state-failed
                 - codebuild-project-build-state-succeeded

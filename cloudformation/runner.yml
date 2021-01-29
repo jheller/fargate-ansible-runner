@@ -1,0 +1,189 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: Origin runner in Fargate
+
+Parameters:
+  ContainerTag:
+    Type: String
+    Description: The tag to use with the Container image
+    Default: latest
+
+  ECRepository:
+    Type: String
+    Description: The name of the ECR repository
+    Default: fargate-ansible-runner
+
+Resources:
+  RunnerSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: SG for Fargate containers
+      VpcId: !ImportValue VpcId
+
+  TaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: ECRAccess
+          PolicyDocument:
+            Statement:
+              - Sid: LogAccess
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogStreams
+                Resource: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*
+              - Sid: EcrAccess
+                Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                Resource: '*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role
+
+  ContainerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: ansible-service
+          PolicyDocument:
+            Statement:
+              - Sid: LogAccess
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogStreams
+                Resource: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*
+              - Sid: CloudformationAccess
+                Effect: Allow
+                Resource: '*'
+                Action:
+                  - cloudformation:*
+                  - ec2:*
+                  - elasticloadbalancing:*
+                  - autoscaling:*
+                  - cloudwatch:*
+                  - s3:*
+                  - sns:*
+                  - config:*
+                  - route53:*
+                  - kms:DescribeKey
+                  - kms:GenerateRandom
+                  - kms:Get*
+                  - kms:List*
+                  - kms:ReEncrypt*
+                  - kms:CreateKey
+                  - kms:PutKeyPolicy
+                  - kms:CreateAlias
+                  - kms:DeleteAlias
+                  - kms:ScheduleKeyDeletion
+                  - lambda:*
+                  - logs:CreateLogGroup
+                  - logs:*
+                  - cloudtrail:*
+                  - cloudwatch:*
+                  - iam:Get*
+                  - iam:AddRoleToInstanceProfile
+                  - iam:AttachRolePolicy
+                  - iam:ListAttachedRolePolicies
+                  - iam:CreateAccountAlias
+                  - iam:CreateInstanceProfile
+                  - iam:CreateRole
+                  - iam:CreatePolicy
+                  - iam:CreatePolicyVersion
+                  - iam:DeleteAccountAlias
+                  - iam:DeleteInstanceProfile
+                  - iam:DeleteRole
+                  - iam:DeleteRolePolicy
+                  - iam:DetachRolePolicy
+                  - iam:DeletePolicy
+                  - iam:ListPolicyVersions
+                  - iam:PassRole
+                  - iam:PutRolePolicy
+                  - iam:RemoveRoleFromInstanceProfile
+                  - iam:UpdateAccountPasswordPolicy
+              - Sid: SSMParameterAccess
+                Effect: Allow
+                Action:
+                  - ssm:GetParametersByPath
+                  - ssm:GetParameters
+                  - ssm:GetParameter
+                Resource:
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/*
+              - Sid: KMSDecryptSSMParams
+                Effect: Allow
+                Action:
+                  - kms:Decrypt
+                Resource:
+                  - !Sub arn:aws:kms:${AWS::Region}:${AWS::AccountId}:alias/aws/ssm
+  RunnerTask:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      RequiresCompatibilities:
+        - FARGATE
+      Family: ansible-runner
+      Cpu: '512'
+      Memory: '1024'
+      ExecutionRoleArn: !Ref TaskExecutionRole
+      TaskRoleArn: !Ref ContainerRole
+      NetworkMode: awsvpc
+      ContainerDefinitions:
+        - Name: ansible-runner
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRepository}:${ContainerTag}
+          Essential: true
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: fargate-ansible-runner
+              awslogs-create-group: true
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: container
+          Environment:
+            - Name: Playbook
+              Value: site.yml
+            - Name: AWSregion
+              Value: !Ref AWS::Region
+
+  # RunnerService:
+  #   Type: AWS::ECS::Service
+  #   Properties:
+  #     Cluster: !Ref EcsCluster
+  #     LaunchType: FARGATE
+  #     ServiceName: origin-runner
+  #     DesiredCount: 1
+  #     TaskDefinition: !Ref RunnerTask
+  #     NetworkConfiguration:
+  #       AwsvpcConfiguration:
+  #         SecurityGroups:
+  #           - !Ref RunnerSg
+  #         Subnets:
+  #           - !ImportValue AppSubnetA
+  #           - !ImportValue AppSubnetB
+  #           - !ImportValue AppSubnetC
