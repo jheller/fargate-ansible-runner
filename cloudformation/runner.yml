@@ -13,6 +13,11 @@ Parameters:
     Description: The name of the ECR repository
     Default: fargate-ansible-runner
 
+  Ec2KeySSM:
+    Type: String
+    Description: Name of an SSM parameter to get the SSH key from
+    Default: /ec2_key/fargate-ansible-runner
+
 Resources:
   RunnerSg:
     Type: AWS::EC2::SecurityGroup
@@ -170,6 +175,8 @@ Resources:
               Value: site.yml
             - Name: AWSregion
               Value: !Ref AWS::Region
+            - Name: Ec2KeySSM
+              Value: !Ref Ec2KeySSM
 
   # RunnerService:
   #   Type: AWS::ECS::Service

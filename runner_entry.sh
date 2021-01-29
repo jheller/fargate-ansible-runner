@@ -2,11 +2,7 @@
 
 cat <<EOF > /runner/env/extravars
 ---
-RegionName: ${RegionName}
-Platform: ${Platform}
-TargetVpc: ${TargetVpc}
-Site: ${Site}
-version: ${version}
+RegionName: ${AWSregion}
 EOF
 
 aws ssm get-parameter --name ${Ec2KeySSM} --with-decryption --region ${AWSregion} --output text --query 'Parameter.Value' >> /runner/env/ssh_key

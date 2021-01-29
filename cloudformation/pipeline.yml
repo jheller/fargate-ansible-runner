@@ -101,8 +101,7 @@ Resources:
           Action:
             - logs:*
             - ecs:*
-            - ec2:CreateSecurityGroup
-            - ec2:DescribeSecurityGroups
+            - ec2:*
             - ecr:CompleteLayerUpload
             - ecr:GetAuthorizationToken
             - ecr:InitiateLayerUpload
