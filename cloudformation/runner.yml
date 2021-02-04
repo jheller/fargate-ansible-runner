@@ -18,7 +18,17 @@ Parameters:
     Description: Name of an SSM parameter to get the SSH key from
     Default: /ec2_key/fargate-ansible-runner
 
+  NamingPrefix:
+    Description: Naming prefix for anything that needs to be differentiated
+    Type: String
+    Default: ansible-fargate
+
 Resources:
+  EcsCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub ${NamingPrefix}-Cluster
+
   RunnerSg:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -194,3 +204,9 @@ Resources:
   #           - !ImportValue AppSubnetA
   #           - !ImportValue AppSubnetB
   #           - !ImportValue AppSubnetC
+Outputs:
+  TaskDefinition:
+    Description: ARN of the task definition
+    Value: !Ref RunnerTask
+    Export:
+      Name: !Sub ${NamingPrefix}-TaskArn
