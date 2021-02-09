@@ -28,12 +28,6 @@ Resources:
     Properties:
       ClusterName: !Sub ${NamingPrefix}-Cluster
 
-  RunnerSg:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: SG for Fargate containers
-      VpcId: !ImportValue VpcId
-
   TaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -155,6 +149,35 @@ Resources:
                   - kms:Decrypt
                 Resource:
                   - !Sub arn:aws:kms:${AWS::Region}:${AWS::AccountId}:alias/aws/ssm
+
+  EventInvokeECSRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - events.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: ansible-service
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action: ecs:RunTask
+                Resource:
+                  - !Ref RunnerTask
+              - Effect: Allow
+                Action: iam:PassRole
+                Resource: '*'
+                Condition:
+                  StringLike:
+                    iam:PassedToService: ecs-tasks.amazonaws.com
+
   RunnerTask:
     Type: AWS::ECS::TaskDefinition
     Properties:
@@ -185,22 +208,30 @@ Resources:
             - Name: Ec2KeySSM
               Value: !Ref Ec2KeySSM
 
-  # RunnerService:
-  #   Type: AWS::ECS::Service
-  #   Properties:
-  #     Cluster: !Ref EcsCluster
-  #     LaunchType: FARGATE
-  #     ServiceName: origin-runner
-  #     DesiredCount: 1
-  #     TaskDefinition: !Ref RunnerTask
-  #     NetworkConfiguration:
-  #       AwsvpcConfiguration:
-  #         SecurityGroups:
-  #           - !Ref RunnerSg
-  #         Subnets:
-  #           - !ImportValue AppSubnetA
-  #           - !ImportValue AppSubnetB
-  #           - !ImportValue AppSubnetC
+  RunnerEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Run the task on a schedule
+      RoleArn: !GetAtt EventInvokeECSRole.Arn
+      ScheduleExpression: cron(0 14 * * ? *)
+      State: ENABLED
+      Targets:
+        - EcsParameters:
+            LaunchType: FARGATE
+            NetworkConfiguration:
+               awsvpcConfiguration:
+                  AssignPublicIp: DISABLED
+                  SecurityGroups:
+                    - Fn::ImportValue: !Sub ${NamingPrefix}-RunnerSg
+                  Subnets:
+                    - Fn::ImportValue: !Sub ${NamingPrefix}-PrvSubnetA
+                    - Fn::ImportValue: !Sub ${NamingPrefix}-PrvSubnetB
+                    - Fn::ImportValue: !Sub ${NamingPrefix}-PrvSubnetC
+            PlatformVersion: "1.4.0"
+            TaskCount: 1
+            TaskDefinitionArn: !Ref RunnerTask
+
+
 Outputs:
   TaskDefinition:
     Description: ARN of the task definition
