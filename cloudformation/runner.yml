@@ -219,7 +219,7 @@ Resources:
         - EcsParameters:
             LaunchType: FARGATE
             NetworkConfiguration:
-               awsvpcConfiguration:
+               AwsVpcConfiguration:
                   AssignPublicIp: DISABLED
                   SecurityGroups:
                     - Fn::ImportValue: !Sub ${NamingPrefix}-RunnerSg
