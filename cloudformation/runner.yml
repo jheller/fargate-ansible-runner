@@ -212,11 +212,13 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Description: Run the task on a schedule
-      RoleArn: !Ref EventInvokeECSRole
       ScheduleExpression: cron(0 14 * * ? *)
       State: ENABLED
       Targets:
-        - EcsParameters:
+        - Arn: !Ref RunnerTask
+          Id: !Sub ${NamingPrefix}-runner-scheduled-event
+          RoleArn: !GetAtt EventInvokeECSRole.Arn
+          EcsParameters:
             LaunchType: FARGATE
             NetworkConfiguration:
                AwsVpcConfiguration:
