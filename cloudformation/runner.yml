@@ -6,7 +6,6 @@ Parameters:
   ImageDigest:
     Type: String
     Description: The digest to use with the Container image
-    Default: latest
 
   ECRepository:
     Type: String
