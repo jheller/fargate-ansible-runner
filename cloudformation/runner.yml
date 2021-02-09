@@ -3,9 +3,9 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: Origin runner in Fargate
 
 Parameters:
-  ContainerTag:
+  ImageDigest:
     Type: String
-    Description: The tag to use with the Container image
+    Description: The digest to use with the Container image
     Default: latest
 
   ECRepository:
@@ -169,7 +169,7 @@ Resources:
       NetworkMode: awsvpc
       ContainerDefinitions:
         - Name: ansible-runner
-          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRepository}:${ContainerTag}
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRepository}@${ImageDigest}
           Essential: true
           LogConfiguration:
             LogDriver: awslogs
