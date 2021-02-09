@@ -212,7 +212,7 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Description: Run the task on a schedule
-      RoleArn: !GetAtt EventInvokeECSRole.Arn
+      RoleArn: !Ref EventInvokeECSRole
       ScheduleExpression: cron(0 14 * * ? *)
       State: ENABLED
       Targets:
