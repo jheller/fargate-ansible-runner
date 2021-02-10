@@ -107,6 +107,7 @@ Resources:
             - ecr:InitiateLayerUpload
             - ecr:PutImage
             - ecr:UploadLayerPart
+            - events:*
             - iam:Get*
             - iam:AddRoleToInstanceProfile
             - iam:AttachRolePolicy
