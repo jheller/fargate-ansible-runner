@@ -363,7 +363,7 @@ Resources:
                   }
                 ]
               }
-            }
+
 
   # LaunchLifeCycleStateMachine:
   #   Type: AWS::StepFunctions::StateMachine
