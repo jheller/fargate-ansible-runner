@@ -245,7 +245,7 @@ Resources:
   #               Action: lambda:InvokeFunction
   #               Resource:
   #                 - !Ref AsgLaunchResumeFunction
-                  - !Sub ${AsgLaunchResumeFunction}:*
+  #                - !Sub ${AsgLaunchResumeFunction}:*
 
   RunnerTask:
     Type: AWS::ECS::TaskDefinition
