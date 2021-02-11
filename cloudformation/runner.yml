@@ -338,17 +338,32 @@ Resources:
               AsgName: $.detail.AutoScalingGroupName
               HookName: $.detail.LifecycleHookName
               ActionToken: $.detail.LifecycleActionToken
-            InputTemplate:
-              containerOverrides:
-                - environment:
-                    - Name: Playbook
-                      Value: lifecycle.yml
-                    - Name: ASG_NAME
-                      Value: <AsgName>
-                    - Name: HOOK_NAME
-                      Value: <HookName>
-                    - Name: ACTION_TOKEN
-                      Value: <ActionToken>
+            InputTemplate: |
+              {
+                "containerOverrides": [
+                  {
+                    "environment": [
+                      {
+                        "Name": "Playbook",
+                        "Value": "lifecycle.yml"
+                      },
+                      {
+                        "Name": "ASG_NAME",
+                        "Value": <AsgName>
+                      },
+                      {
+                        "Name": "HOOK_NAME",
+                        "Value": <HookName>
+                      },
+                      {
+                        "Name": "ACTION_TOKEN",
+                        "Value": <ActionToken>
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
 
   # LaunchLifeCycleStateMachine:
   #   Type: AWS::StepFunctions::StateMachine
