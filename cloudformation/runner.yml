@@ -215,7 +215,7 @@ Resources:
       ScheduleExpression: cron(0 14 * * ? *)
       State: ENABLED
       Targets:
-        - Arn: !Ref RunnerTask
+        - Arn: !GetAtt EcsCluster.Arn
           Id: !Sub ${NamingPrefix}-runner-scheduled-event
           RoleArn: !GetAtt EventInvokeECSRole.Arn
           EcsParameters:
