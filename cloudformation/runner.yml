@@ -178,6 +178,75 @@ Resources:
                   StringLike:
                     iam:PassedToService: ecs-tasks.amazonaws.com
 
+  # StepFunctionRole:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     AssumeRolePolicyDocument:
+  #       Version: 2012-10-17
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal:
+  #             Service:
+  #               - states.amazonaws.com
+  #           Action:
+  #             - sts:AssumeRole
+  #     Path: "/"
+  #     Policies:
+  #       - PolicyName: LambdaInvoke
+  #         PolicyDocument:
+  #           Statement:
+  #             - Effect: Allow
+  #               Action: lambda:InvokeFunction
+  #               Resource:
+  #                 - !Ref AsgLaunchResumeFunction
+  #                 - !Sub ${AsgLaunchResumeFunction}:*
+  #             - Effect: Allow
+  #               Action: iam:PassRole
+  #               Resource: '*'
+  #       - PolicyName: EcsTaskManagement
+  #         PolicyDocument:
+  #           Statement:
+  #             - Effect: Allow
+  #               Action: ecs:RunTask
+  #               Resource:
+  #                 - !Ref RunnerTask
+  #             - Effect: Allow
+  #               Action:
+  #                 - ecs:StopTask
+  #                 - ecs:DescribeTasks
+  #               Resource: '*'
+  #             - Effect: Allow
+  #               Action:
+  #                 - events:PutTargets
+  #                 - events:PutRule
+  #                 - events:DescribeRule
+  #               Resource: arn:aws:events:ap-southeast-2:628936956560:rule/StepFunctionsGetEventsForECSTaskRule
+  #
+  # LambdaExecutionRole:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     AssumeRolePolicyDocument:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #         - Action:
+  #             - sts:AssumeRole
+  #           Effect: Allow
+  #           Principal:
+  #             Service:
+  #               - lambda.amazonaws.com
+  #     Path: /
+  #     ManagedPolicyArns:
+  #       - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+  #     Policies:
+  #       - PolicyName: AsgLifeCycle
+  #         PolicyDocument:
+  #           Statement:
+  #             - Effect: Allow
+  #               Action: lambda:InvokeFunction
+  #               Resource:
+  #                 - !Ref AsgLaunchResumeFunction
+                  - !Sub ${AsgLaunchResumeFunction}:*
+
   RunnerTask:
     Type: AWS::ECS::TaskDefinition
     Properties:
@@ -208,7 +277,7 @@ Resources:
             - Name: Ec2KeySSM
               Value: !Ref Ec2KeySSM
 
-  RunnerEventRule:
+  ScheduledEventRule:
     Type: AWS::Events::Rule
     Properties:
       Description: Run the task on a schedule
@@ -233,6 +302,125 @@ Resources:
             TaskCount: 1
             TaskDefinitionArn: !Ref RunnerTask
 
+  LifecycleEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Run the task on a schedule
+      EventPattern:
+        source:
+          - aws.autoscaling
+        detail-type:
+          - EC2 Instance-launch Lifecycle Action
+        detail:
+          AutoScalingGroupName:
+            - Fn::ImportValue: !Sub ${NamingPrefix}-PrvSubnetA
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt EcsCluster.Arn
+          Id: !Sub ${NamingPrefix}-runner-scheduled-event
+          RoleArn: !GetAtt EventInvokeECSRole.Arn
+          EcsParameters:
+            LaunchType: FARGATE
+            NetworkConfiguration:
+               AwsVpcConfiguration:
+                  AssignPublicIp: DISABLED
+                  SecurityGroups:
+                    - Fn::ImportValue: !Sub ${NamingPrefix}-RunnerSg
+                  Subnets:
+                    - Fn::ImportValue: !Sub ${NamingPrefix}-PrvSubnetA
+                    - Fn::ImportValue: !Sub ${NamingPrefix}-PrvSubnetB
+                    - Fn::ImportValue: !Sub ${NamingPrefix}-PrvSubnetC
+            PlatformVersion: "1.4.0"
+            TaskCount: 1
+            TaskDefinitionArn: !Ref RunnerTask
+          InputTransformer:
+            InputPathsMap:
+              AsgName: $.detail.AutoScalingGroupName
+              HookName: $.detail.LifecycleHookName
+              ActionToken: $.detail.LifecycleActionToken
+            InputTemplate:
+              containerOverrides:
+                - environment:
+                    - Name: Playbook
+                      Value: lifecycle.yml
+                    - Name: ASG_NAME
+                      Value: <AsgName>
+                    - Name: HOOK_NAME
+                      Value: <HookName>
+                    - Name: ACTION_TOKEN
+                      Value: <ActionToken>
+
+  # LaunchLifeCycleStateMachine:
+  #   Type: AWS::StepFunctions::StateMachine
+  #   Properties:
+  #     DefinitionString:
+  #       Comment: Run ECS task then notify ASG
+  #       StartAt: RunEcsTask
+  #       States:
+  #         - RunEcsTask:
+  #             Type: Task
+  #             Resource: arn:aws:states:::ecs:runTask.sync
+  #             Parameters:
+  #               LaunchType: FARGATE
+  #               Cluster: !GetAtt EcsCluster.Arn
+  #               TaskDefinition: !Ref RunnerTask
+  #               NetworkConfiguration:
+  #                  AwsVpcConfiguration:
+  #                     AssignPublicIp: DISABLED
+  #                     SecurityGroups:
+  #                       - Fn::ImportValue: !Sub ${NamingPrefix}-RunnerSg
+  #                     Subnets:
+  #                       - Fn::ImportValue: !Sub ${NamingPrefix}-PrvSubnetA
+  #                       - Fn::ImportValue: !Sub ${NamingPrefix}-PrvSubnetB
+  #                       - Fn::ImportValue: !Sub ${NamingPrefix}-PrvSubnetC
+  #             End: true
+  #     # LoggingConfiguration:
+  #     #   LoggingConfiguration
+  #     RoleArn: !GetAtt StepFunctionRole.Arn
+  #     # TracingConfiguration:
+  #     #   TracingConfiguration
+
+  # LifeCycleLambda:
+  #   Type: AWS::Lambda::Function
+  #   DependsOn: LambdaExecutionRole
+  #   Properties:
+  #     Description: Sends complete lifecycle action to ASG
+  #     FunctionName: !Sub ${NamingPrefix}-asg-lifecycle
+  #     Handler: index.lambdaHandler
+  #     Role: !GetAtt LambdaExecutionRole.Arn
+  #     Runtime: python3.7
+  #     Timeout: '10'
+  #     Code:
+  #       ZipFile: |
+  #         import sys
+  #         import logging
+  #         import boto3
+  #         import json
+  #         import os
+  #
+  #         logger = logging.getLogger()
+  #         logger.setLevel('INFO')
+  #
+  #         def resume_lifecycle(result, life_cycle_hook, auto_scaling_group, instance_id):
+  #             asg_client = boto3.client('autoscaling')
+  #             try:
+  #                 response = asg_client.complete_lifecycle_action(
+  #                     LifecycleHookName=life_cycle_hook,
+  #                     AutoScalingGroupName=auto_scaling_group,
+  #                     LifecycleActionResult='result,
+  #                     InstanceId=instance_id
+  #                     )
+  #                 if check_response(response):
+  #                     logger.info("Lifecycle hook resumed correctly: %s", response)
+  #                 else:
+  #                     logger.error("Lifecycle hook could not be resumed: %s", response)
+  #             except Exception, e:
+  #                 logger.error("Lifecycle hook resume could not be executed: %s", str(e))
+  #                 return None
+  #
+  #         def lambdaHandler(event, context):
+  #             logger.info("event: %s" % json.dumps(event))
+  #             logger.info("context: %s" % json.dumps(context))
 
 Outputs:
   TaskDefinition:
