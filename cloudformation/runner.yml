@@ -313,7 +313,7 @@ Resources:
           - EC2 Instance-launch Lifecycle Action
         detail:
           AutoScalingGroupName:
-            - Fn::ImportValue: !Sub ${NamingPrefix}-PrvSubnetA
+            - Fn::ImportValue: !Sub ${NamingPrefix}-AsgName
       State: ENABLED
       Targets:
         - Arn: !GetAtt EcsCluster.Arn
