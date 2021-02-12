@@ -281,15 +281,15 @@ Resources:
                       },
                       {
                         "Name": "ASG_NAME",
-                        "Value": <AsgName>
+                        "Value": "<AsgName>"
                       },
                       {
                         "Name": "HOOK_NAME",
-                        "Value": <HookName>
+                        "Value": "<HookName>"
                       },
                       {
                         "Name": "ACTION_TOKEN",
-                        "Value": <ActionToken>
+                        "Value": "<ActionToken>"
                       }
                     ]
                   }
