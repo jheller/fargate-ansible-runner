@@ -1,5 +1,5 @@
 ---
 
-- name: Send lifecycle hook completion to ASG.
+- name: aws autoscaling complete-lifecycle-action --lifecycle-action-result CONTINUE --lifecycle-hook-name {{ HookName }} --auto-scaling-group-name {{ AsgName }} --lifecycle-action-token {{ ActionToken }} --region {{ AWSregion }}
   shell:
     cmd: aws autoscaling complete-lifecycle-action --lifecycle-action-result CONTINUE --lifecycle-hook-name {{ HookName }} --auto-scaling-group-name {{ AsgName }} --lifecycle-action-token {{ ActionToken }} --region {{ AWSregion }}
