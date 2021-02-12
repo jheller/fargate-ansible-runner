@@ -1,6 +1,6 @@
 ---
 # Set variables from environment
 
-AsgName: "{{ lookup('env', 'ASG_NAME' }}"
-HookName: "{{ lookup('env', 'HOOK_NAME' }}"
-ActionToken: "{{ lookup('env', 'ACTION_TOKEN' }}"
+AsgName: "{{ lookup('env', 'ASG_NAME') }}"
+HookName: "{{ lookup('env', 'HOOK_NAME') }}"
+ActionToken: "{{ lookup('env', 'ACTION_TOKEN') }}"

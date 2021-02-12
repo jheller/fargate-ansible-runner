@@ -226,7 +226,7 @@ Resources:
           PolicyDocument:
             Statement:
             - Effect: Allow
-              Action: lambda:InvokeFunction
+              Action: ecs:RunTask
               Resource:
                 - !Ref RunnerTask
             - Effect: Allow
@@ -234,7 +234,7 @@ Resources:
               Resource: '*'
               Condition:
                 StringLike:
-                  iam:PassedToService: lambda.amazonaws.com
+                  iam:PassedToService: ecs-tasks.amazonaws.com
 
   RunnerTask:
     Type: AWS::ECS::TaskDefinition
@@ -342,6 +342,18 @@ Resources:
       Role: !GetAtt LambdaExecutionRole.Arn
       Runtime: python3.7
       Timeout: '10'
+      Environment:
+        Variables:
+          Playbook: lifecycle.yml
+          CLUSTER: !Ref EcsCluster
+          SUBNET_A:
+            Fn::ImportValue: !Sub ${NamingPrefix}-PrvSubnetA
+          SUBNET_B:
+            Fn::ImportValue: !Sub ${NamingPrefix}-PrvSubnetB
+          SUBNET_C:
+            Fn::ImportValue: !Sub ${NamingPrefix}-PrvSubnetC
+          SECURITY_GROUP:
+            Fn::ImportValue: !Sub ${NamingPrefix}-RunnerSg
       Code:
         ZipFile: |
           import sys
@@ -355,7 +367,71 @@ Resources:
 
           def lambdaHandler(event, context):
               logger.info("event: %s" % json.dumps(event))
-              logger.info("context: %s" % json.dumps(context))
+
+              detail = event['detail']
+              subnetA = os.environ.get("SUBNET_A")
+              subnetB = os.environ.get("SUBNET_B")
+              subnetC = os.environ.get("SUBNET_C")
+              securityGroup = os.environ.get("SECURITY_GROUP")
+
+              ecs = boto3.client('ecs')
+
+              network = {
+                  'awsvpcConfiguration': {
+                      'subnets': [
+                          subnetA,
+                          subnetB,
+                          subnetC
+                      ],
+                      'securityGroups': [
+                          securityGroup
+                      ],
+                      'assignPublicIp': 'DISABLED'
+                  }
+              }
+
+              overrides = {
+                  'containerOverrides': [
+                      {
+                          'name': 'ansible-runner',
+                          'environment': [
+                              {
+                                  'name': 'Playbook',
+                                  'value': os.environ.get("Playbook")
+                              },
+                              {
+                                  'name': 'ASG_NAME',
+                                  'value': detail['AutoScalingGroupName']
+                              },
+                              {
+                                  'name': 'HOOK_NAME',
+                                  'value': detail['LifecycleHookName']
+                              },
+                              {
+                                  'name': 'ACTION_TOKEN',
+                                  'value': detail['LifecycleActionToken']
+                              },
+                          ]
+                      }
+                  ]
+              }
+
+              response = ecs.run_task(
+                  cluster = os.environ.get("CLUSTER"),
+                  taskDefinition='ansible-runner',
+                  launchType='FARGATE',
+                  networkConfiguration=network,
+                  overrides=overrides
+              )
+
+              # Output an indication of the running task
+              if len(response['tasks']) > 0:
+                  for container in response['tasks'][0]['containers']:
+                      logger.info(f"Name: {container['name']}")
+                      logger.info(f"Image: {container['image']}")
+                      logger.info(f"Status: {container['lastStatus']}")
+              else:
+                  logger.info("No tasks started")
 
   LifecycleLambdaPolicy:
     Type: AWS::Lambda::Permission
