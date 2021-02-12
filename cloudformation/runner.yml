@@ -178,34 +178,6 @@ Resources:
                   StringLike:
                     iam:PassedToService: ecs-tasks.amazonaws.com
 
-  # EventInvokeLambdaRole:
-  #   Type: AWS::IAM::Role
-  #   Properties:
-  #     AssumeRolePolicyDocument:
-  #       Version: 2012-10-17
-  #       Statement:
-  #         - Effect: Allow
-  #           Principal:
-  #             Service:
-  #               - events.amazonaws.com
-  #           Action:
-  #             - sts:AssumeRole
-  #     Path: "/"
-  #     Policies:
-  #       - PolicyName: lambda-service
-  #         PolicyDocument:
-  #           Statement:
-  #             - Effect: Allow
-  #               Action: ecs:RunTask
-  #               Resource:
-  #                 - !Ref RunnerTask
-  #             - Effect: Allow
-  #               Action: iam:PassRole
-  #               Resource: '*'
-  #               Condition:
-  #                 StringLike:
-  #                   iam:PassedToService: ecs-tasks.amazonaws.com
-
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -307,30 +279,6 @@ Resources:
       Targets:
         - Arn: !GetAtt LifeCycleLambda.Arn
           Id: !Sub ${NamingPrefix}-runner-lifecycle-event
-          # RoleArn: !GetAtt LambdaExecutionRole.Arn
-        # - Arn: !GetAtt EcsCluster.Arn
-        #   Id: !Sub ${NamingPrefix}-runner-lifecycle-event
-        #   RoleArn: !GetAtt EventInvokeECSRole.Arn
-        #   EcsParameters:
-        #     LaunchType: FARGATE
-        #     NetworkConfiguration:
-        #        AwsVpcConfiguration:
-        #           AssignPublicIp: DISABLED
-        #           SecurityGroups:
-        #             - Fn::ImportValue: !Sub ${NamingPrefix}-RunnerSg
-        #           Subnets:
-        #             - Fn::ImportValue: !Sub ${NamingPrefix}-PrvSubnetA
-        #             - Fn::ImportValue: !Sub ${NamingPrefix}-PrvSubnetB
-        #             - Fn::ImportValue: !Sub ${NamingPrefix}-PrvSubnetC
-        #     PlatformVersion: "1.4.0"
-        #     TaskCount: 1
-        #     TaskDefinitionArn: !Ref RunnerTask
-        #   InputTransformer:
-        #     InputPathsMap:
-        #       AsgName: $.detail.AutoScalingGroupName
-        #       HookName: $.detail.LifecycleHookName
-        #       ActionToken: $.detail.LifecycleActionToken
-        #     InputTemplate: "{\"containerOverrides\":[{\"name\":\"ansible-runner\",\"environment\":[{\"Name\":\"Playbook\",\"Value\":\"lifecycle.yml\"},{\"Name\":\"ASG_NAME\",\"Value\":<AsgName>},{\"Name\":\"HOOK_NAME\",\"Value\":<HookName>},{\"Name\":\"ACTION_TOKEN\",\"Value\":<ActionToken>}]}]}"
 
   LifeCycleLambda:
     Type: AWS::Lambda::Function

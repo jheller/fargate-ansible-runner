@@ -1,0 +1,196 @@
+# Creates a simple VPC and subnets for demo
+
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: 'Creates a CodePipeline to deploy our serverless framework stack'
+
+Parameters:
+  NamingPrefix:
+    Description: Naming prefix for anything that needs to be differentiated
+    Type: String
+    Default: ansible-fargate
+
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: "10.100.0.0/16"
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key:  Name
+          Value: !Sub ${NamingPrefix}-vpc
+
+  PubSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: "10.100.0.0/24"
+      AvailabilityZone: ap-southeast-2a
+      VpcId: !Ref Vpc
+
+  PubSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: "10.100.1.0/24"
+      AvailabilityZone: ap-southeast-2b
+      VpcId: !Ref Vpc
+
+  PubSubnetC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: "10.100.2.0/24"
+      AvailabilityZone: ap-southeast-2c
+      VpcId: !Ref Vpc
+
+  PrvSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: "10.100.4.0/24"
+      AvailabilityZone: ap-southeast-2a
+      VpcId: !Ref Vpc
+
+  PrvSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: "10.100.5.0/24"
+      AvailabilityZone: ap-southeast-2b
+      VpcId: !Ref Vpc
+
+  PrvSubnetC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: "10.100.6.0/24"
+      AvailabilityZone: ap-southeast-2c
+      VpcId: !Ref Vpc
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref Vpc
+
+  NatGatewayAZa:
+    DependsOn: InternetGatewayAttachment
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt 'EipNatAZa.AllocationId'
+      SubnetId: !Ref 'PubSubnetA'
+
+  EipNatAZa:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  RouteTablePub:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+
+  RouteTablePrv:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+
+  PubDefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref RouteTablePub
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  # Routes for the Prv subnets
+  PrvDefaultRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref RouteTablePrv
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGatewayAZa
+
+  PubRouteTableAssocSubnetA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref 'RouteTablePub'
+      SubnetId: !Ref 'PubSubnetA'
+
+  PubRouteTableAssocSubnetB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref 'RouteTablePub'
+      SubnetId: !Ref 'PubSubnetB'
+
+  PubRouteTableAssocSubnetC:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref 'RouteTablePub'
+      SubnetId: !Ref 'PubSubnetC'
+
+  PrvRouteTableAssocSubnetA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref 'RouteTablePrv'
+      SubnetId: !Ref 'PrvSubnetA'
+
+  PrvRouteTableAssocSubnetB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref 'RouteTablePrv'
+      SubnetId: !Ref 'PrvSubnetB'
+
+  PrvRouteTableAssocSubnetC:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref 'RouteTablePrv'
+      SubnetId: !Ref 'PrvSubnetC'
+
+Outputs:
+  VPCId:
+    Description: VPC ID for this stack
+    Value: !Ref Vpc
+    Export:
+      Name: !Sub ${NamingPrefix}-VpcId
+
+  PubSubnetA:
+    Description: Public Subnet A
+    Value: !Ref PubSubnetA
+    Export:
+      Name: !Sub ${NamingPrefix}-PubSubnetA
+
+  PubSubnetB:
+    Description: Public Subnet B
+    Value: !Ref PubSubnetB
+    Export:
+      Name: !Sub ${NamingPrefix}-PubSubnetB
+
+  PubSubnetC:
+    Description: Public Subnet C
+    Value: !Ref PubSubnetC
+    Export:
+      Name: !Sub ${NamingPrefix}-PubSubnetC
+
+  PrvSubnetA:
+    Description: Prv Subnet A
+    Value: !Ref PrvSubnetA
+    Export:
+      Name: !Sub ${NamingPrefix}-PrvSubnetA
+
+  PrvSubnetB:
+    Description: Prv Subnet B
+    Value: !Ref PrvSubnetB
+    Export:
+      Name: !Sub ${NamingPrefix}-PrvSubnetB
+
+  PrvSubnetC:
+    Description: Prv Subnet C
+    Value: !Ref PrvSubnetC
+    Export:
+      Name: !Sub ${NamingPrefix}-PrvSubnetC
+
+  PrvCidrBlock:
+    Description: CIDR of the  Private subnets
+    Value: "10.100.4.0/22"
+    Export:
+      Name: !Sub ${NamingPrefix}-PrvCidr

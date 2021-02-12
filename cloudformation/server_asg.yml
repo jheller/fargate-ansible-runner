@@ -1,0 +1,229 @@
+# Creates a simple Auto Scaling Group with an ALB.
+
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: 'Creates a CodePipeline to deploy our serverless framework stack'
+
+Parameters:
+  NamingPrefix:
+    Description: Naming prefix for anything that needs to be differentiated
+    Type: String
+    Default: ansible-fargate
+
+  SshKey:
+    Description: CodePipeline needs a utility bucket for its internal use. Specify a unique prefix for the bucket name
+    Type: String
+    Default: fargate-ansible-runner
+
+  ImageId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+
+  EC2Type:
+    Description: Instance type
+    Type: String
+    Default: t2.micro
+
+Resources:
+  WebSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Web Server(s) Security Group
+      VpcId:
+        Fn::ImportValue: !Sub ${NamingPrefix}-VpcId
+
+  AlbSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Web Alb Security Group
+      VpcId:
+        Fn::ImportValue: !Sub ${NamingPrefix}-VpcId
+
+  RunnerSg:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: SG for Fargate containers
+      VpcId:
+        Fn::ImportValue: !Sub ${NamingPrefix}-VpcId
+
+  WebSgIngressHTTP:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref WebSg
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      SourceSecurityGroupId: !Ref AlbSg
+
+# Permit an Ansible runner container to talk to the instances.
+  WebSgIngressSSH:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref WebSg
+      IpProtocol: tcp
+      FromPort: 22
+      ToPort: 22
+      SourceSecurityGroupId: !Ref RunnerSg
+
+  AlbSgIngressHTTP:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref AlbSg
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      CidrIp: 0.0.0.0/0
+
+  WebServerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+      Path: /
+      Policies:
+        - PolicyName: "CompleteLifeCycleAction"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - autoscaling:CompleteLifecycleAction
+                Resource: '*'
+
+  WebServerInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref WebServerRole
+
+  # WebALB:
+  #   Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+  #   Properties:
+  #     LoadBalancerAttributes:
+  #       - Key: idle_timeout.timeout_seconds
+  #         Value: 3600
+  #     Scheme: internet-facing
+  #     SecurityGroups:
+  #       - !Ref AlbSg
+  #     Subnets:
+  #       - Fn::ImportValue: !Sub ${NamingPrefix}-PubSubnetA
+  #       - Fn::ImportValue: !Sub ${NamingPrefix}-PubSubnetB
+  #       - Fn::ImportValue: !Sub ${NamingPrefix}-PubSubnetC
+  #
+  # WebALBHttpListener:
+  #   Type: AWS::ElasticLoadBalancingV2::Listener
+  #   Properties:
+  #     DefaultActions:
+  #       - Type: forward
+  #         TargetGroupArn: !Ref WebTargetGroup
+  #     LoadBalancerArn: !Ref WebALB
+  #     Port: 80
+  #     Protocol: "HTTP"
+  #
+  # WebTargetGroup:
+  #   Type: AWS::ElasticLoadBalancingV2::TargetGroup
+  #   Properties:
+  #     Port: 80
+  #     Protocol: HTTP
+  #     # HealthCheckIntervalSeconds: 30
+  #     # HealthCheckPath: '/'
+  #     # HealthCheckProtocol: 'HTTP'
+  #     # HealthCheckPort: '80'
+  #     # HealthCheckTimeoutSeconds: 5
+  #     # HealthyThresholdCount: 3
+  #     # UnhealthyThresholdCount: 5
+  #     VpcId:
+  #       Fn::ImportValue: !Sub ${NamingPrefix}-VpcId
+  #     TargetGroupAttributes:
+  #       - Key: deregistration_delay.timeout_seconds
+  #         Value: '20'
+  #     Tags:
+  #       - Key: Name
+  #         Value: !Sub ${NamingPrefix}-Web
+
+  WebLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: !Ref ImageId
+      InstanceType: !Ref EC2Type
+      KeyName: !Ref SshKey
+      AssociatePublicIpAddress: false
+      IamInstanceProfile: !Ref WebServerInstanceProfile
+      SecurityGroups:
+        - !Ref WebSg
+
+  WebAutoScale:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    UpdatePolicy:
+      AutoScalingReplacingUpdate:
+        WillReplace: true
+    Properties:
+      HealthCheckType: EC2
+      HealthCheckGracePeriod: 300
+      LaunchConfigurationName: !Ref WebLaunchConfig
+      # TargetGroupARNs:
+      #   - !Ref WebTargetGroup
+      MinSize: 0
+      MaxSize: 3
+      DesiredCapacity: 1
+      VPCZoneIdentifier:
+        - Fn::ImportValue: !Sub ${NamingPrefix}-PrvSubnetA
+        - Fn::ImportValue: !Sub ${NamingPrefix}-PrvSubnetB
+        - Fn::ImportValue: !Sub ${NamingPrefix}-PrvSubnetC
+      Tags:
+        - Key: Name
+          Value: !Sub ${NamingPrefix}-Web
+          PropagateAtLaunch: true
+        - Key: ansible-target
+          Value: apache
+          PropagateAtLaunch: true
+
+  LaunchLifecycleHook:
+    Type: AWS::AutoScaling::LifecycleHook
+    Properties:
+      AutoScalingGroupName: !Ref WebAutoScale
+      DefaultResult: ABANDON
+      HeartbeatTimeout: 300
+      LifecycleTransition: autoscaling:EC2_INSTANCE_LAUNCHING
+  #
+  # LaunchEventRule:
+  # Type: AWS::Events::Rule
+  # Properties:
+  #   Description: Run the ansible-fargate ECS task when an instance is launched
+  #   EventPattern: {
+  #     source:
+  #       - aws.autoscaling
+  #     detail-type:
+  #       - EC2 Instance-launch Lifecycle Action
+  #     detail:
+  #       AutoScalingGroupName:
+  #         !Ref WebAutoScale
+  #   RoleArn: String
+  #   State: ENABLED
+  #   Targets:
+  #     - Target
+
+Outputs:
+  RunnerSgId:
+    Description: DNS name of ALB
+    Value: !Ref RunnerSg
+    Export:
+      Name: !Sub ${NamingPrefix}-RunnerSg
+
+  AsgGroupName:
+    Description: Name of the autoscaling group
+    Value: !Ref WebAutoScale
+    Export:
+      Name: !Sub ${NamingPrefix}-AsgName
+
+#   AlbDns:
+#     Description: DNS name of ALB
+#     Value: !GetAtt WebALB.DNSName
