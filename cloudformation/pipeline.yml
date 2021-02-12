@@ -108,6 +108,7 @@ Resources:
             - ecr:PutImage
             - ecr:UploadLayerPart
             - events:*
+            - lambda:*
             - iam:Get*
             - iam:AddRoleToInstanceProfile
             - iam:AttachRolePolicy
