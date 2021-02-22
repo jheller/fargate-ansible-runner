@@ -6,10 +6,10 @@ groups:
 hostnames:
 # a list in order of precedence for hostname variables.
 #
+  - private-ip-address
   - ip-address
   - dns-name
   - tag:Name
-  - private-ip-address
 compose:
   ansible_host: private_ip_address
   # ansible_host: ip_address
