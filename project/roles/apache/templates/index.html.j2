@@ -28,7 +28,7 @@
   <div align="center">
     <h1>Congratulations</h1>
     <h2>This application was deployed using ansible-runner</h2>
-    <h3>host: {{ ansible_fqdn }}</h3>
+    <h3>instance id: {{ ansible_ec2_instance_id }}</h3>
     <h3>private ip: {{ ansible_eth0.ipv4.address }}</h3>
   </div>
 </body>

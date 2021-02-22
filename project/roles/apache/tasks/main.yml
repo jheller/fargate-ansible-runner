@@ -1,17 +1,20 @@
 ---
 - name: Ensure httpd is installed.
-  package:
+  ansible.builtin.package:
     name: httpd
     state: present
 
+- name: Get ec2 facts
+  amazon.aws.ec2_metadata_facts:
+
 - name: Copy index.html into place
-  template:
+  ansible.builtin.template:
     src: index.html.j2
     dest: /var/www/html/index.html
     mode: 0644
 
-- name: Saart httpd service
-  service:
+- name: Start httpd service
+  ansible.builtin.service:
     name: httpd
     state: started
     enabled: true

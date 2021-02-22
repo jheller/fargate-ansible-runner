@@ -1,6 +1,6 @@
 ---
 
 - name: aws autoscaling complete-lifecycle-action --lifecycle-action-result CONTINUE --lifecycle-hook-name {{ HookName }} --auto-scaling-group-name {{ AsgName }} --lifecycle-action-token {{ ActionToken }} --region {{ AWSregion }}
-  shell:
+  ansible.builtin.shell:
     cmd: aws autoscaling complete-lifecycle-action --lifecycle-action-result CONTINUE --lifecycle-hook-name {{ HookName }} --auto-scaling-group-name {{ AsgName }} --lifecycle-action-token {{ ActionToken }} --region {{ AWSregion }}
   run_once: true

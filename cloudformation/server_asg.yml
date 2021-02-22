@@ -169,8 +169,8 @@ Resources:
       HealthCheckType: ELB
       HealthCheckGracePeriod: 300
       LaunchConfigurationName: !Ref WebLaunchConfig
-      # TargetGroupARNs:
-      #   - !Ref WebTargetGroup
+      TargetGroupARNs:
+        - !Ref WebTargetGroup
       MinSize: 0
       MaxSize: 3
       DesiredCapacity: 0
