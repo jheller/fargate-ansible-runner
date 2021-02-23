@@ -1,10 +1,18 @@
 # Ansible Playbooks
 
-This folder contains Ansible playbooks for configuring and maintaining EC2 instances.
-
-It uses dynamic inventory to discover instances based on tags.
+This folder contains the Ansible playbooks for configuring and maintaining EC2 instances.
 
 | Playbook            | Description                                 |
 |---------------------|---------------------------------------------|
-| site.yml            | Sample Apache install                       |
-| lifecycle.yml       | Apache install + ASG lifecycle notification |
+| site.yml            | Runs just the apache role                   |
+| lifecycle.yml       | Runs the apache and asg_lifecycle roles.    |
+
+## Roles
+| Role             | Description                                 |
+|------------------|---------------------------------------------|
+| apache           | Simple Apache install with a templated index.html |
+| asg_lifecycle    | ASG complete-lifecycle notification               |
+
+## Inventory
+The [aws_ec2](https://docs.ansible.com/ansible/latest/collections/amazon/aws/aws_ec2_inventory.html) inventory plugin
+is used. This dynamically finds EC2 target hosts using defined filters. In this case it is looking for instances with the tag **ansible-target** set to 'apache'.

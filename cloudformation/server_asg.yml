@@ -193,23 +193,6 @@ Resources:
       DefaultResult: ABANDON
       HeartbeatTimeout: 300
       LifecycleTransition: autoscaling:EC2_INSTANCE_LAUNCHING
-  #
-  # LaunchEventRule:
-  # Type: AWS::Events::Rule
-  # Properties:
-  #   Description: Run the ansible-fargate ECS task when an instance is launched
-  #   EventPattern: {
-  #     source:
-  #       - aws.autoscaling
-  #     detail-type:
-  #       - EC2 Instance-launch Lifecycle Action
-  #     detail:
-  #       AutoScalingGroupName:
-  #         !Ref WebAutoScale
-  #   RoleArn: String
-  #   State: ENABLED
-  #   Targets:
-  #     - Target
 
 Outputs:
   RunnerSgId:

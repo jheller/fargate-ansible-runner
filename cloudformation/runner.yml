@@ -238,30 +238,31 @@ Resources:
             - Name: Ec2KeySSM
               Value: !Ref Ec2KeySSM
 
-  ScheduledEventRule:
-    Type: AWS::Events::Rule
-    Properties:
-      Description: Run the task on a schedule
-      ScheduleExpression: cron(0 14 * * ? *)
-      State: ENABLED
-      Targets:
-        - Arn: !GetAtt EcsCluster.Arn
-          Id: !Sub ${NamingPrefix}-runner-scheduled-event
-          RoleArn: !GetAtt EventInvokeECSRole.Arn
-          EcsParameters:
-            LaunchType: FARGATE
-            NetworkConfiguration:
-               AwsVpcConfiguration:
-                  AssignPublicIp: DISABLED
-                  SecurityGroups:
-                    - Fn::ImportValue: !Sub ${NamingPrefix}-RunnerSg
-                  Subnets:
-                    - Fn::ImportValue: !Sub ${NamingPrefix}-PrvSubnetA
-                    - Fn::ImportValue: !Sub ${NamingPrefix}-PrvSubnetB
-                    - Fn::ImportValue: !Sub ${NamingPrefix}-PrvSubnetC
-            PlatformVersion: "1.4.0"
-            TaskCount: 1
-            TaskDefinitionArn: !Ref RunnerTask
+  # Uncomment this to run the playbook on a regular schedule
+  # ScheduledEventRule:
+  #   Type: AWS::Events::Rule
+  #   Properties:
+  #     Description: Run the task on a schedule
+  #     ScheduleExpression: cron(0 14 * * ? *)
+  #     State: ENABLED
+  #     Targets:
+  #       - Arn: !GetAtt EcsCluster.Arn
+  #         Id: !Sub ${NamingPrefix}-runner-scheduled-event
+  #         RoleArn: !GetAtt EventInvokeECSRole.Arn
+  #         EcsParameters:
+  #           LaunchType: FARGATE
+  #           NetworkConfiguration:
+  #              AwsVpcConfiguration:
+  #                 AssignPublicIp: DISABLED
+  #                 SecurityGroups:
+  #                   - Fn::ImportValue: !Sub ${NamingPrefix}-RunnerSg
+  #                 Subnets:
+  #                   - Fn::ImportValue: !Sub ${NamingPrefix}-PrvSubnetA
+  #                   - Fn::ImportValue: !Sub ${NamingPrefix}-PrvSubnetB
+  #                   - Fn::ImportValue: !Sub ${NamingPrefix}-PrvSubnetC
+  #           PlatformVersion: "1.4.0"
+  #           TaskCount: 1
+  #           TaskDefinitionArn: !Ref RunnerTask
 
   LifecycleEventRule:
     Type: AWS::Events::Rule
