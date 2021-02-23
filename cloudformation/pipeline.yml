@@ -25,7 +25,7 @@ Parameters:
 
   CodeCommitRepo:
     Type: String
-    Description:  Our proxy codecommit repo in form  repo/branch
+    Description:  Our proxy codecommit repo in form repo/branch
     Default: fargate-ansible-runner/master
 
   ECRegistry:
