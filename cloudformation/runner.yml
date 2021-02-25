@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 
-Description: Origin runner in Fargate
+Description: Ansible runner in Fargate
 
 Parameters:
   ImageDigest:
