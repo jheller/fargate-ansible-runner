@@ -133,13 +133,13 @@ Resources:
     Properties:
       Port: 80
       Protocol: HTTP
-      # HealthCheckIntervalSeconds: 30
-      # HealthCheckPath: '/'
-      # HealthCheckProtocol: 'HTTP'
-      # HealthCheckPort: '80'
-      # HealthCheckTimeoutSeconds: 5
-      # HealthyThresholdCount: 3
-      # UnhealthyThresholdCount: 5
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: '/'
+      HealthCheckProtocol: 'HTTP'
+      HealthCheckPort: '80'
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 3
+      UnhealthyThresholdCount: 5
       VpcId:
         Fn::ImportValue: !Sub ${NamingPrefix}-VpcId
       TargetGroupAttributes:
@@ -186,6 +186,67 @@ Resources:
           Value: apache
           PropagateAtLaunch: true
 
+  ###########################################################
+  # Run the playbook on a regular schedule.
+  ###########################################################
+
+  # ScheduledEventRule:
+  #   Type: AWS::Events::Rule
+  #   Properties:
+  #     Description: Run the task on a schedule
+  #     ScheduleExpression: cron(0 14 * * ? *)
+  #     State: ENABLED
+  #     Targets:
+  #       - Arn: !GetAtt EcsCluster.Arn
+  #         Id: !Sub ${NamingPrefix}-runner-scheduled-event
+  #         RoleArn: !GetAtt EventInvokeECSRole.Arn
+  #         EcsParameters:
+  #           LaunchType: FARGATE
+  #           NetworkConfiguration:
+  #              AwsVpcConfiguration:
+  #                 AssignPublicIp: DISABLED
+  #                 SecurityGroups:
+  #                   - !Ref RunnerSg
+  #                 Subnets:
+  #                   - Fn::ImportValue: !Sub ${NamingPrefix}-PrvSubnetA
+  #                   - Fn::ImportValue: !Sub ${NamingPrefix}-PrvSubnetB
+  #                   - Fn::ImportValue: !Sub ${NamingPrefix}-PrvSubnetC
+  #           PlatformVersion: "1.4.0"
+  #           TaskCount: 1
+  #           TaskDefinitionArn: !Sub arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:task-definition/ansible-runner
+  #
+  # EventInvokeECSRole:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     AssumeRolePolicyDocument:
+  #       Version: 2012-10-17
+  #       Statement:
+  #         - Effect: Allow
+  #           Principal:
+  #             Service:
+  #               - events.amazonaws.com
+  #           Action:
+  #             - sts:AssumeRole
+  #     Path: "/"
+  #     Policies:
+  #       - PolicyName: ansible-service
+  #         PolicyDocument:
+  #           Statement:
+  #             - Effect: Allow
+  #               Action: ecs:RunTask
+  #               Resource:
+  #                 - !Ref RunnerTask
+  #             - Effect: Allow
+  #               Action: iam:PassRole
+  #               Resource: '*'
+  #               Condition:
+  #                 StringLike:
+  #                   iam:PassedToService: ecs-tasks.amazonaws.com
+
+  ###########################################################
+  # Run the playbook on a Launch Lifecycle Event.
+  ###########################################################
+
   LaunchLifecycleHook:
     Type: AWS::AutoScaling::LifecycleHook
     Properties:
@@ -194,18 +255,174 @@ Resources:
       HeartbeatTimeout: 300
       LifecycleTransition: autoscaling:EC2_INSTANCE_LAUNCHING
 
-Outputs:
-  RunnerSgId:
-    Description: DNS name of ALB
-    Value: !Ref RunnerSg
-    Export:
-      Name: !Sub ${NamingPrefix}-RunnerSg
 
-  AsgGroupName:
-    Description: Name of the autoscaling group
-    Value: !Ref WebAutoScale
-    Export:
-      Name: !Sub ${NamingPrefix}-AsgName
+  LifecycleEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: Run the task on an auto-scaling lifecycle launch event
+      EventPattern:
+        source:
+          - aws.autoscaling
+        detail-type:
+          - EC2 Instance-launch Lifecycle Action
+        detail:
+          AutoScalingGroupName:
+            - !Ref WebAutoScale
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt LifeCycleLambda.Arn
+          Id: !Sub ${NamingPrefix}-runner-lifecycle-event
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: AsgLifeCycle
+          PolicyDocument:
+            Statement:
+            - Effect: Allow
+              Action: ecs:RunTask
+              Resource:
+                - !Sub arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:task-definition/ansible-runner
+            - Effect: Allow
+              Action: iam:PassRole
+              Resource: '*'
+              Condition:
+                StringLike:
+                  iam:PassedToService: ecs-tasks.amazonaws.com
+
+  LifeCycleLambda:
+    Type: AWS::Lambda::Function
+    DependsOn: LambdaExecutionRole
+    Properties:
+      Description: Sends complete lifecycle action to ASG
+      FunctionName: !Sub ${NamingPrefix}-asg-lifecycle
+      Handler: index.lambdaHandler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: python3.7
+      Timeout: '10'
+      Environment:
+        Variables:
+          Playbook: lifecycle.yml
+          CLUSTER: !Sub ${NamingPrefix}-Cluster
+          SUBNET_A:
+            Fn::ImportValue: !Sub ${NamingPrefix}-PrvSubnetA
+          SUBNET_B:
+            Fn::ImportValue: !Sub ${NamingPrefix}-PrvSubnetB
+          SUBNET_C:
+            Fn::ImportValue: !Sub ${NamingPrefix}-PrvSubnetC
+          SECURITY_GROUP: !Ref RunnerSg
+      Code:
+        ZipFile: |
+          import sys
+          import logging
+          import boto3
+          import json
+          import os
+
+          logger = logging.getLogger()
+          logger.setLevel('INFO')
+
+          def lambdaHandler(event, context):
+              logger.info("event: %s" % json.dumps(event))
+
+              detail = event['detail']
+              subnetA = os.environ.get("SUBNET_A")
+              subnetB = os.environ.get("SUBNET_B")
+              subnetC = os.environ.get("SUBNET_C")
+              securityGroup = os.environ.get("SECURITY_GROUP")
+
+              ecs = boto3.client('ecs')
+
+              network = {
+                  'awsvpcConfiguration': {
+                      'subnets': [
+                          subnetA,
+                          subnetB,
+                          subnetC
+                      ],
+                      'securityGroups': [
+                          securityGroup
+                      ],
+                      'assignPublicIp': 'DISABLED'
+                  }
+              }
+
+              overrides = {
+                  'containerOverrides': [
+                      {
+                          'name': 'ansible-runner',
+                          'environment': [
+                              {
+                                  'name': 'Playbook',
+                                  'value': os.environ.get("Playbook")
+                              },
+                              {
+                                  'name': 'ASG_NAME',
+                                  'value': detail['AutoScalingGroupName']
+                              },
+                              {
+                                  'name': 'HOOK_NAME',
+                                  'value': detail['LifecycleHookName']
+                              },
+                              {
+                                  'name': 'ACTION_TOKEN',
+                                  'value': detail['LifecycleActionToken']
+                              },
+                          ]
+                      }
+                  ]
+              }
+
+              response = ecs.run_task(
+                  cluster = os.environ.get("CLUSTER"),
+                  taskDefinition='ansible-runner',
+                  launchType='FARGATE',
+                  networkConfiguration=network,
+                  overrides=overrides
+              )
+
+              # Output an indication of the running task
+              if len(response['tasks']) > 0:
+                  for container in response['tasks'][0]['containers']:
+                      logger.info(f"Name: {container['name']}")
+                      logger.info(f"Image: {container['image']}")
+                      logger.info(f"Status: {container['lastStatus']}")
+              else:
+                  logger.info("No tasks started")
+
+  LifecycleLambdaPolicy:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt LifeCycleLambda.Arn
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt LifecycleEventRule.Arn
+
+# Outputs:
+#   RunnerSgId:
+#     Description: DNS name of ALB
+#     Value: !Ref RunnerSg
+#     Export:
+#       Name: !Sub ${NamingPrefix}-RunnerSg
+#
+#   AsgGroupName:
+#     Description: Name of the autoscaling group
+#     Value: !Ref WebAutoScale
+#     Export:
+#       Name: !Sub ${NamingPrefix}-AsgName
 
 #   AlbDns:
 #     Description: DNS name of ALB
