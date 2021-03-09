@@ -2,7 +2,7 @@
 
 AWSTemplateFormatVersion: 2010-09-09
 
-Description: 'Creates a CodePipeline to deploy our serverless framework stack'
+Description: 'Creates a VPC for demo purposes'
 
 Parameters:
   NamingPrefix:
