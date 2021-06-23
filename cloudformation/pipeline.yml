@@ -97,39 +97,45 @@ Resources:
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
-          Effect: Allow
-          Action:
-            - logs:*
-            - ecs:*
-            - ec2:*
-            - ecr:CompleteLayerUpload
-            - ecr:GetAuthorizationToken
-            - ecr:InitiateLayerUpload
-            - ecr:PutImage
-            - ecr:UploadLayerPart
-            - events:*
-            - lambda:*
-            - iam:Get*
-            - iam:AddRoleToInstanceProfile
-            - iam:AttachRolePolicy
-            - iam:ListAttachedRolePolicies
-            - iam:CreateAccountAlias
-            - iam:CreateInstanceProfile
-            - iam:CreateRole
-            - iam:CreatePolicy
-            - iam:CreatePolicyVersion
-            - iam:DeleteAccountAlias
-            - iam:DeleteInstanceProfile
-            - iam:DeleteRole
-            - iam:DeleteRolePolicy
-            - iam:DetachRolePolicy
-            - iam:DeletePolicy
-            - iam:ListPolicyVersions
-            - iam:PassRole
-            - iam:PutRolePolicy
-            - iam:RemoveRoleFromInstanceProfile
-            - iam:UpdateAccountPasswordPolicy
-          Resource: "*"
+          - Effect: Allow
+            Action:
+              - logs:*
+              - ecs:*
+              - ec2:*
+              - ecr:CompleteLayerUpload
+              - ecr:GetAuthorizationToken
+              - ecr:InitiateLayerUpload
+              - ecr:PutImage
+              - ecr:UploadLayerPart
+              - events:*
+              - lambda:*
+              - iam:Get*
+              - iam:AddRoleToInstanceProfile
+              - iam:AttachRolePolicy
+              - iam:ListAttachedRolePolicies
+              - iam:CreateAccountAlias
+              - iam:CreateInstanceProfile
+              - iam:CreateRole
+              - iam:CreatePolicy
+              - iam:CreatePolicyVersion
+              - iam:DeleteAccountAlias
+              - iam:DeleteInstanceProfile
+              - iam:DeleteRole
+              - iam:DeleteRolePolicy
+              - iam:DetachRolePolicy
+              - iam:DeletePolicy
+              - iam:ListPolicyVersions
+              - iam:PassRole
+              - iam:PutRolePolicy
+              - iam:RemoveRoleFromInstanceProfile
+              - iam:UpdateAccountPasswordPolicy
+            Resource: "*"
+          - Effect: Allow
+            Action: iam:CreateServiceLinkedRole
+            Resource: arn:aws:iam::*:role/aws-service-role/ecs.amazonaws.com/AWSServiceRoleForECS*
+            Condition:
+              StringLike:
+                iam:AWSServiceName: ecs.amazonaws.com
       Roles:
         - !Ref DeployRole
 
